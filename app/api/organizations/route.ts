@@ -1,136 +1,90 @@
-import { NextRequest, NextResponse } from "next/server";
+import { NextResponse } from "next/server";
 
-export const dynamic = "force-dynamic";
+type DemoOrg = {
+  id: string;
+  name: string;
+  address: string;
+  cities: string[];
+  states: string[];
+  pinCodes: string[];
+  acceptedItems: string[];
+  sourceUrl: string;
+  reason: string;
+};
 
-export async function GET(request: NextRequest) {
+const organizations: DemoOrg[] = [
+  {
+    id: "sads",
+    name: "Share At Door Step",
+    address: "India-wide donation service",
+    cities: [],
+    states: ["kerala", "tamil nadu", "karnataka", "maharashtra", "delhi"],
+    pinCodes: [],
+    acceptedItems: ["Clothes", "Books", "Electronics"],
+    sourceUrl: "https://shareatdoorstep.com/donate/",
+    reason: "Its donation service lists clothes, books and e-waste/electronics and provides doorstep pickup options.",
+  },
+  {
+    id: "goonj",
+    name: "Goonj",
+    address: "Multiple centres across India",
+    cities: [],
+    states: ["kerala", "delhi", "maharashtra", "karnataka", "tamil nadu"],
+    pinCodes: [],
+    acceptedItems: ["Clothes", "Books", "Electronics"],
+    sourceUrl: "https://goonj.org/faq/",
+    reason: "Goonj publicly lists clothing, books/paper and working electronics among material it can receive, subject to its current guidelines.",
+  },
+  {
+    id: "local-demo",
+    name: "Local Community Recycling Partner",
+    address: "Nearby partner — demo listing",
+    cities: [],
+    states: [],
+    pinCodes: [],
+    acceptedItems: ["Plastic", "Electronics"],
+    sourceUrl: "https://www.epa.gov/recycle",
+    reason: "Demo partner used to demonstrate how Spenden can route recyclable materials to a suitable local recycling partner.",
+  },
+];
+
+function normalize(value: string) {
+  return value.trim().toLowerCase();
+}
+
+export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
+  const item = searchParams.get("item") || "";
+  const city = normalize(searchParams.get("city") || "");
+  const state = normalize(searchParams.get("state") || "");
+  const pinCode = searchParams.get("pinCode") || "";
 
-  const lat = Number(searchParams.get("lat"));
-  const lon = Number(searchParams.get("lon"));
-
-  if (!Number.isFinite(lat) || !Number.isFinite(lon)) {
-    return NextResponse.json(
-      { error: "Invalid location coordinates." },
-      { status: 400 }
-    );
+  if (!item) {
+    return NextResponse.json({ error: "Item is required." }, { status: 400 });
   }
 
-  const query = `
-[out:json][timeout:20];
+  const matches = organizations
+    .filter((org) => org.acceptedItems.includes(item))
+    .map((org) => {
+      const cityMatch = city && org.cities.some((x) => normalize(x) === city);
+      const stateMatch = state && org.states.some((x) => normalize(x) === state);
+      const pinMatch = pinCode && org.pinCodes.includes(pinCode);
 
-(
-  nwr(around:15000,${lat},${lon})["amenity"="social_facility"];
-  nwr(around:15000,${lat},${lon})["office"="ngo"];
-  nwr(around:15000,${lat},${lon})["social_centre"];
-  nwr(around:15000,${lat},${lon})["charity"];
-);
+      let score = 0;
+      if (pinMatch) score += 5;
+      if (cityMatch) score += 4;
+      if (stateMatch) score += 2;
 
-out center tags;
-`;
+      return {
+        ...org,
+        locationMatch: Boolean(pinMatch || cityMatch || stateMatch),
+        score,
+      };
+    })
+    .sort((a, b) => b.score - a.score);
 
-  try {
-    const response = await fetch(
-      "https://overpass-api.de/api/interpreter",
-      {
-        method: "POST",
-        headers: {
-          "Content-Type": "text/plain",
-          "User-Agent":
-            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/153.0 Safari/537.36",
-          "Referer": "http://localhost:3000/",
-        },
-        body: query,
-        cache: "no-store",
-      }
-    );
-
-    if (!response.ok) {
-      const errorText = await response.text();
-
-      console.error(
-        "Overpass error:",
-        response.status,
-        errorText
-      );
-
-      return NextResponse.json(
-        {
-          error: `Organization service returned ${response.status}.`,
-        },
-        { status: 502 }
-      );
-    }
-
-    const data = await response.json();
-
-    const organizations = (data.elements || [])
-      .map((place: any) => {
-        const latitude =
-          place.lat ?? place.center?.lat ?? null;
-
-        const longitude =
-          place.lon ?? place.center?.lon ?? null;
-
-        if (
-          latitude === null ||
-          longitude === null
-        ) {
-          return null;
-        }
-
-        const tags = place.tags || {};
-
-        return {
-          id: `${place.type}-${place.id}`,
-
-          name:
-            tags.name ||
-            tags["name:en"] ||
-            "Unnamed organization",
-
-          address:
-            tags["addr:full"] ||
-            [
-              tags["addr:housenumber"],
-              tags["addr:street"],
-              tags["addr:suburb"],
-              tags["addr:city"],
-            ]
-              .filter(Boolean)
-              .join(", ") ||
-            "Address not listed",
-
-          phone:
-            tags.phone ||
-            tags["contact:phone"] ||
-            null,
-
-          website:
-            tags.website ||
-            tags["contact:website"] ||
-            null,
-
-          latitude,
-          longitude,
-
-          source: "OpenStreetMap",
-        };
-      })
-      .filter(Boolean);
-
-    return NextResponse.json({
-      organizations,
-    });
-
-  } catch (error) {
-    console.error("Organization search failed:", error);
-
-    return NextResponse.json(
-      {
-        error:
-          "The organization search service could not be reached.",
-      },
-      { status: 500 }
-    );
-  }
+  return NextResponse.json({
+    organizations: matches,
+    note: "This school-project demo uses a small source-backed dataset. Spenden pickup is a proposed service layer, not a claim that each organization provides its own pickup.",
+  });
 }
