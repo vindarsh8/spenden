@@ -11,11 +11,7 @@ const items = [
 
 export default function Home() {
   const [screen, setScreen] = useState("home");
-  const [email, setEmail] = useState("");
-  const [sendingWelcome, setSendingWelcome] = useState(false);
-  const [sendingConfirmation, setSendingConfirmation] = useState(false);
-  const [pickupConfirmed, setPickupConfirmed] = useState(false);
-  const [emailError, setEmailError] = useState("");
+  const [phone, setPhone] = useState("");
   const [item, setItem] = useState("");
   const [locationMethod, setLocationMethod] = useState("");
   const [state, setState] = useState("");
@@ -32,30 +28,13 @@ export default function Home() {
   const [searching, setSearching] = useState(false);
   const [searchError, setSearchError] = useState("");
 
-  async function continueEmail() {
-    const cleaned = email.trim();
-    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(cleaned)) {
-      alert("Please enter a valid email address.");
+  function continuePhone() {
+    const cleaned = phone.replace(/\D/g, "");
+    if (cleaned.length < 10) {
+      alert("Please enter a valid phone number.");
       return;
     }
-
-    setSendingWelcome(true);
-    setEmailError("");
-    try {
-      const response = await fetch("/api/email", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ type: "welcome", email: cleaned }),
-      });
-      const data = await response.json();
-      if (!response.ok) throw new Error(data.error || "Could not send welcome email.");
-      setScreen("item");
-    } catch (error) {
-      console.error("Welcome email error:", error);
-      setEmailError(error instanceof Error ? error.message : "Could not send the welcome email.");
-    } finally {
-      setSendingWelcome(false);
-    }
+    setScreen("item");
   }
 
   function continueItem() {
@@ -158,47 +137,17 @@ export default function Home() {
     }
   }
 
-  async function confirmPickup() {
+  function confirmPickup() {
     if (!organization) {
       alert("Please choose an organization.");
       return;
     }
-
-    setSendingConfirmation(true);
-    setEmailError("");
-    try {
-      const response = await fetch("/api/email", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          type: "pickup",
-          email,
-          item,
-          organization: organization.name,
-          date,
-          time,
-          address,
-          city,
-          state,
-          pinCode,
-        }),
-      });
-      const data = await response.json();
-      if (!response.ok) throw new Error(data.error || "Could not send pickup email.");
-      setPickupConfirmed(true);
-    } catch (error) {
-      console.error("Pickup email error:", error);
-      setEmailError(error instanceof Error ? error.message : "Could not send the pickup email.");
-    } finally {
-      setSendingConfirmation(false);
-    }
+    setScreen("confirmation");
   }
 
   function reset() {
     setScreen("home");
-    setEmail("");
-    setEmailError("");
-    setPickupConfirmed(false);
+    setPhone("");
     setItem("");
     setLocationMethod("");
     setState("");
@@ -227,35 +176,33 @@ export default function Home() {
             <p className="text-gray-700 mt-2">Find suitable organizations and schedule a pickup from your home.</p>
 
             <button
-              onClick={() => setScreen("email")}
+              onClick={() => setScreen("phone")}
               className="w-full mt-10 p-4 rounded-xl bg-green-600 text-white font-bold text-lg hover:bg-green-700"
             >
-              📧 Continue with Email
+              📱 Continue
             </button>
 
-            <p className="text-gray-500 text-sm mt-5">Your email is used for welcome and pickup updates.</p>
+            <p className="text-gray-500 text-sm mt-5">A phone number is required for pickup notifications.</p>
           </div>
         )}
 
-        {screen === "email" && (
+        {screen === "phone" && (
           <div>
             <button onClick={() => setScreen("home")} className="text-green-700 font-semibold">← Back</button>
             <div className="text-center mt-6">
-              <div className="text-5xl">📧</div>
-              <h1 className="text-3xl font-bold mt-4">Your email address</h1>
-              <p className="text-gray-700 mt-3">We'll send a welcome email and your pickup details here.</p>
+              <div className="text-5xl">📱</div>
+              <h1 className="text-3xl font-bold mt-4">Your phone number</h1>
+              <p className="text-gray-700 mt-3">We'll use this for pickup notifications and reminders.</p>
               <input
-                type="email"
-                inputMode="email"
-                autoComplete="email"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                placeholder="Enter your email address"
+                type="tel"
+                inputMode="tel"
+                value={phone}
+                onChange={(e) => setPhone(e.target.value)}
+                placeholder="Enter your phone number"
                 className="w-full mt-6 p-4 border-2 border-gray-300 rounded-xl text-black bg-white outline-none focus:border-green-600"
               />
-              {emailError && <p className="text-red-600 text-sm mt-3">{emailError}</p>}
-              <button onClick={continueEmail} disabled={sendingWelcome} className="w-full mt-4 p-4 rounded-xl bg-green-600 text-white font-bold hover:bg-green-700 disabled:opacity-60">
-                {sendingWelcome ? "Sending welcome email..." : "Continue →"}
+              <button onClick={continuePhone} className="w-full mt-4 p-4 rounded-xl bg-green-600 text-white font-bold hover:bg-green-700">
+                Continue →
               </button>
             </div>
           </div>
@@ -426,9 +373,9 @@ export default function Home() {
 
         {screen === "confirmation" && organization && (
           <div className="text-center">
-            <div className="text-6xl">{pickupConfirmed ? "✅" : "📦"}</div>
-            <h1 className="text-3xl font-bold text-green-700 mt-5">{pickupConfirmed ? "Pickup Email Sent" : "Review Your Pickup"}</h1>
-            <p className="text-gray-700 mt-3">{pickupConfirmed ? `Pickup details have been emailed to ${email}.` : "Review the details below, then confirm to email your pickup details."}</p>
+            <div className="text-6xl">✅</div>
+            <h1 className="text-3xl font-bold text-green-700 mt-5">Pickup Details Saved</h1>
+            <p className="text-gray-700 mt-3">Spenden will arrange the pickup for your selected organization.</p>
 
             <div className="mt-8 bg-green-50 rounded-2xl p-6 text-left">
               <p className="font-bold text-lg">📦 Item</p>
@@ -446,8 +393,8 @@ export default function Home() {
               <p className="font-bold text-lg mt-5">📅 Date & time</p>
               <p>{date} at {time}</p>
 
-              <p className="font-bold text-lg mt-5">📧 Email</p>
-              <p>{email}</p>
+              <p className="font-bold text-lg mt-5">📱 Phone</p>
+              <p>{phone}</p>
 
               <div className="mt-6 p-4 rounded-xl bg-white border border-green-200">
                 <p className="font-bold text-green-700">🚚 Spenden pickup</p>
@@ -457,13 +404,7 @@ export default function Home() {
               </div>
             </div>
 
-            {!pickupConfirmed && (
-              <button onClick={confirmPickup} disabled={sendingConfirmation} className="w-full mt-6 p-4 rounded-xl bg-green-600 text-white font-bold hover:bg-green-700 disabled:opacity-60">
-                {sendingConfirmation ? "Sending confirmation email..." : "Confirm Pickup & Email Details"}
-              </button>
-            )}
-            {emailError && <p className="text-red-600 text-sm mt-3">{emailError}</p>}
-            <button onClick={reset} className="w-full mt-3 p-4 rounded-xl border-2 border-gray-300 bg-white font-bold hover:bg-gray-50">
+            <button onClick={reset} className="w-full mt-6 p-4 rounded-xl border-2 border-gray-300 bg-white font-bold hover:bg-gray-50">
               Start Again
             </button>
           </div>
